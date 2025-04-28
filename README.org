@@ -1,0 +1,271 @@
+#+TITLE: OpenWRT support on TP-Link V2 (AX1800) router.
+
+# openwrt-tplink-ex220-v2
+# My notes on adding support to TP-Link EX220 V2 (AX1800)  router.
+
+This are my notes on building a OpenWRT image to my TP-Link EX220 V2 router.
+
+NOTE: Be aware that doing this might void your warranty. Also I will
+not be responsible if you brick your device by following this notes,
+do at your own risk.
+
+[[https://forum.openwrt.org/t/support-for-tp-link-ex220-v2/202620/3][OpenWRT Forum thread for EX220 v2 support]]
+
+* Hardware Highlights
+
+|----------------------+----------------------------------|
+| Model                | EX220                            |
+| Version              | v2                               |
+| CPU                  | MediaTek MT7621AT ver 1, eco 3   |
+| CPU MHz              | 880                              |
+| CPU cores            | 2                                |
+| Flash MB             | 16 (NOR)                         |
+| RAM MB               | 128                              |
+| WLAN Hardware        | MediaTek MT7905, MediaTek MT7975 |
+| WLAN 2.4GHz          | b/g/n/ax                         |
+| WLAN 5.0GHz          | a/n/ac/ax                        |
+| Ethernet 100M ports  | -                                |
+| Ethernet 1Gbit ports | 4 (1x WAN, 3x LAN)               |
+| Modem                | -                                |
+| USB ports            | -                                |
+
+- SoC mt7621:
+  - [[https://git.openwrt.org/?p=openwrt%2Fopenwrt.git&a=search&h=HEAD&st=commit&s=mt7621][mt7621]]
+  - https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/log/?qt=grep&q=mt7621
+- WLAN mt7915:
+  - [[https://git.openwrt.org/?p=openwrt%2Fopenwrt.git&a=search&h=HEAD&st=commit&s=mt7915][mt7915]]
+  - https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/log/?qt=grep&q=mt7915
+- Switch mt7530:
+  - [[https://git.openwrt.org/?p=openwrt%2Fopenwrt.git&a=search&h=HEAD&st=commit&s=mt7530][mt7530]]
+  - https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/log/?qt=grep&q=mt7530
+
+* Router pictures
+
+#+CAPTION: Router board.
+#+NAME:   fig:router-board
+#+ATTR_HTML: :width 1200px
+[[./images/router-board_compress.jpg]]
+
+#+CAPTION: Router board with UART pin identification.
+#+NAME:   fig:router-board-console-pin-header
+#+ATTR_HTML: :width 1200px
+[[./images/router-board-console_compress.jpg]]
+
+The board has a pin header footprint for UART console access.
+
+#+CAPTION: Router flash chip identification.
+#+NAME:   fig:router-flash-chip
+#+ATTR_HTML: :width 800px
+[[./images/flash-chip_compress.jpg]]
+
+* Logs
+
+- [[./logs/tplink-ex220v2_stock_fw_dump.log][Stock firmware log]]
+
+* Steps for flashing
+
+Flashing is only possible via the OEM installation using the serial +
+TFTP method described below. This is so because the factory image must
+be signed, as with the tp-link ex220 v1.
+
+** Serial connection
+
+I use a USB to TTL serial adapter connected to pins ~tx~, ~rx~
+and ~gnd~, soldered to J1. /I used a CP2102 adapter/.
+
+| CP2102 pin | J1  |
+|------------+-----|
+| rx         | tx  |
+| tx         | rx  |
+| gnd        | gnd |
+| --         | vcc |
+
+** Setup a TFTP server
+
+Setup a TFTP server for boot the initramfs from u-boot.
+
+Copy the initramfs file
+([[./build/openwrt-ramips-mt7621-tplink_ex220-v2-initramfs-kernel.bin]])
+to the tftp server path.
+
+** Connect to device
+
+Used =screen /dev/ttyUSB0 115200= and powered up the device,
+interrupting the u-boot automatic boot sequence.
+
+** Change the u-boot environment variables
+
+Used =printenv= to view current environment variables and changed the
+~serverip~ and ~ipaddr~ to values on my network.
+
+#+begin_src sh :noeval
+setenv ipaddr 10.10.10.2; setenv serverip 10.10.10.100
+#+end_src
+
+~ipaddr~ is the device ip address. ~serverip~ is the TFTP server ip
+address.
+
+
+** Get the kernel initramfs from the TFTP server and boot from it.
+
+Load the initramfs to device memory
+
+#+begin_src sh :noeval
+  tftpboot openwrt-snapshot-r29236-b0d43be2f3-ramips-mt7621-tplink_ex220-v2-initramfs-kernel.bin
+#+end_src
+
+Boot from that memory address
+
+#+begin_src sh :noeval
+  bootm
+#+end_src
+
+** Backup your MTD partitions
+
+It's highlly advised to backup your MTD partitions. [[https://openwrt.org/docs/guide-user/installation/generic.backup]]
+
+On the OpenWRT shell, I did:
+
+#+begin_src bash :noeval
+  cat << "EOF" > /tmp/backup.sh
+#+end_src
+
+Then copied:
+
+#+begin_src bash :noeval
+  #!/bin/sh
+
+  BACKUP_HOST="10.10.10.100"
+  BACKUP_USER="username"
+  echo "Backup host ${BACKUP_HOST}"
+
+  cat /proc/mtd | tail -n+2 | while read; do
+    MTD_DEV=$(echo ${REPLY} | cut -f1 -d:)
+    MTD_NAME=$(echo ${REPLY} | cut -f2 -d\")
+    echo "Backing up ${MTD_DEV} (${MTD_NAME})"
+    dd if=/dev/${MTD_DEV}ro | dbclient ${BACKUP_USER}@${BACKUP_HOST} -p 2222 "dd of=~/tmp/${MTD_DEV}_${MTD_NAME}.backup"
+  done
+  EOF
+#+end_src
+
+Update ~BACKUP_HOST~ and ~BACKUP_USER~ to your use case.
+
+** Replace the stock firmware with OpenWRT
+
+Copy the sysupgrade file to the device ~/tmp~ via scp. From my machine:
+
+#+begin_src sh :noeval
+  scp -O /path/to/openwrt-snapshot-r29236-b0d43be2f3-ramips-mt7621-tplink_ex220-v2-squashfs-sysupgrade.bin root@192.168.1.1:/tmp/sysupgrade.bin
+#+end_src
+
+~192.168.1.1.~ is the default ip address of the device after boot with OpenWRT initramfs.
+
+and run ~sysupgrade -v /tmp/sysupgrade.bin~
+
+* Build diff
+
+This is based on 24.10 OpenWRT version.
+
+The ~git diff HEAD~ for this testing image is in [[./build/git-diff-ex220-v2_build][diff]].
+
+* Build Setup
+
+Instructions from [[https://openwrt.org/docs/guide-user/virtualization/obtain.firmware.docker]]
+
+1. Create docker file
+
+   #+begin_example
+     FROM docker.io/debian:stable-slim
+
+     ENV GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+     WORKDIR /workdir
+
+     RUN apt-get update && apt-get install --no-install-recommends --no-install-suggests --yes \
+         'build-essential' \
+         'ca-certificates' \
+         'clang' \
+         'flex' \
+         'bison' \
+         'g++' \
+         'gawk' \
+         'gcc-multilib' \
+         'gettext' \
+         'git' \
+         'libncurses5-dev' \
+         'libssl-dev' \
+         'python3-distutils' \
+         'rsync' \
+         'unzip' \
+         'zlib1g-dev' \
+         'file' \
+         'wget' \
+       && \
+       rm -f -r '/var/lib/apt/' && \
+       rm -f -r '/var/cache/apt/' && \
+       useradd -m -s '/bin/bash' -U 'buildbot'
+
+     USER buildbot
+   #+end_example
+
+2. Clone openwrt repo
+
+   #+begin_src bash :noeval
+     git clone https://github.com/openwrt/openwrt.git
+   #+end_src
+
+3. Create a new worktree for development
+
+   #+begin_src bash :noeval
+     cd /mnt/workfs/openwrt-build/
+
+     git clone git clone https://git.openwrt.org/openwrt/openwrt.git
+     cd openwrt
+     git pull
+
+     git worktree add ../openwrt-dev -b tplink-ex220v2
+
+     cd ../openwrt-dev
+   #+end_src
+
+4. Create dockerignore to avoid waisting space
+
+   #+begin_src sh
+     echo "*" > .dockerignore
+   #+end_src
+
+5. Build the container
+
+   #+begin_src bash :noeval
+     docker build --rm --tag openwrt:debian --file /mnt/workfs/openwrt-build/openwrt-debian-docker /mnt/workfs/openwrt-build/openwrt-dev
+   #+end_src
+
+6. Run the docker container with
+
+   #+begin_src bash :noeval
+     docker run --interactive --rm --tty --ulimit 'nofile=1024:262144' --volume "/mnt/workfs/openwrt-build/workdir:/workdir" --workdir '/workdir' openwrt:debian /bin/bash
+   #+end_src
+
+- NOTE: Setup permissions
+
+** On docker:
+
+1. Update feeds
+
+   #+begin_src bash :noeval
+     ./scripts/feeds update -a
+     ./scripts/feeds install -a
+   #+end_src
+
+2. Configure the image OR
+
+   #+begin_src bash :noeval
+     make menuconfig
+   #+end_src
+
+3. Copy the config from [[./build/config.buildinfo]] to ~.config~ and run =make defconfig=.
+
+   # 1. Get RAMIPS build .config
+
+   #    #+begin_src sh :noeval
+   #      wget -O .config https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7621/config.buildinfo
+   #    #+end_src

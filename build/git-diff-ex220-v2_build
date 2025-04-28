@@ -1,0 +1,344 @@
+diff --git a/target/linux/ramips/dts/mt7621.dtsi b/target/linux/ramips/dts/mt7621.dtsi
+index da992bada4..95e882f802 100644
+--- a/target/linux/ramips/dts/mt7621.dtsi
++++ b/target/linux/ramips/dts/mt7621.dtsi
+@@ -505,6 +505,12 @@
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+ 
++            /* MT7530's phy0 */
++            ethphy0: ethernet-phy@0 {
++                reg = <0>;
++            };
++
++
+ 			switch0: switch@1f {
+ 				compatible = "mediatek,mt7621";
+ 				reg = <0x1f>;
+@@ -519,10 +525,10 @@
+ 					#address-cells = <1>;
+ 					#size-cells = <0>;
+ 
+-					ethphy0: ethernet-phy@0 {
+-						reg = <0>;
+-						interrupts = <0>;
+-					};
++					/* ethphy0: ethernet-phy@0 { */
++					/* 	reg = <0>; */
++					/* 	interrupts = <0>; */
++					/* }; */
+ 
+ 					ethphy1: ethernet-phy@1 {
+ 						reg = <1>;
+diff --git a/target/linux/ramips/dts/mt7621_tplink_ex220-v2.dts b/target/linux/ramips/dts/mt7621_tplink_ex220-v2.dts
+new file mode 100644
+index 0000000000..30c2294a42
+--- /dev/null
++++ b/target/linux/ramips/dts/mt7621_tplink_ex220-v2.dts
+@@ -0,0 +1,228 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
++
++#include "mt7621.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/leds/common.h>
++
++/ {
++	compatible = "tplink,ex220-v2", "mediatek,mt7621-soc";
++	model = "TP-Link EX220 v2";
++
++	aliases {
++		led-boot = &led_power;
++		led-failsafe = &led_power;
++		led-running = &led_running;
++		led-upgrade = &led_power;
++		label-mac-device = &gmac0;
++	};
++
++	chosen {
++		bootargs = "console=ttyS0,115200";
++	};
++
++	keys {
++		compatible = "gpio-keys";
++
++		button-wps {
++			label = "rfkill";
++			gpios = <&gpio 7 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RFKILL>;
++		};
++
++		button-reset {
++			label = "reset";
++			gpios = <&gpio 8 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++        led_running: led-rgb-green {
++            label = "rgb:green";
++  		    color = <LED_COLOR_ID_GREEN>;
++  		    gpios = <&gpio 3 GPIO_ACTIVE_HIGH>;
++            default-state = "keep";
++  	    };
++
++  	    led_power: led-rgb-red {
++            label = "rgb:red";
++  		    color = <LED_COLOR_ID_RED>;
++  		    gpios = <&gpio 4 GPIO_ACTIVE_HIGH>;
++            default-state = "keep";
++  	    };
++
++  	    led-rgb-blue {
++            label = "rgb:blue";
++  		    color = <LED_COLOR_ID_BLUE>;
++  		    gpios = <&gpio 16 GPIO_ACTIVE_HIGH>;
++            default-state = "keep";
++  	    };
++	};
++
++};
++
++&spi0 {
++	status = "okay";
++
++	flash@0 {
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		spi-max-frequency = <25000000>;
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "boot";
++				reg = <0x00 0x30000>;
++				read-only;
++			};
++
++			partition@30000 {
++				label = "boot-env";
++				reg = <0x30000 0x10000>;
++				read-only;
++			};
++
++			partition@40000 {
++				label = "factory";
++				reg = <0x40000 0x10000>;
++				read-only;
++			};
++
++			partition@50000 {
++				label = "config";
++				reg = <0x50000 0x10000>;
++				read-only;
++			};
++
++			partition@60000 {
++				label = "isp_config";
++				reg = <0x60000 0x10000>;
++				read-only;
++			};
++
++			partition@70000 {
++				label = "rom_file";
++				reg = <0x70000 0x10000>;
++				read-only;
++
++				nvmem-layout {
++					compatible = "fixed-layout";
++					#address-cells = <1>;
++					#size-cells = <1>;
++
++					macaddr_rom_file_f100: macaddr@f100 {
++						compatible = "mac-base";
++						reg = <0xf100 0x6>;
++						#nvmem-cell-cells = <1>;
++					};
++				};
++			};
++
++			partition@80000 {
++				label = "cloud";
++				reg = <0x80000 0x10000>;
++				read-only;
++			};
++
++			partition@90000 {
++				label = "radio";
++				reg = <0x90000 0x20000>;
++				read-only;
++
++				nvmem-layout {
++					compatible = "fixed-layout";
++					#address-cells = <1>;
++					#size-cells = <1>;
++
++					eeprom_radio_0: eeprom@0 {
++						reg = <0x0 0xe00>;
++					};
++
++					precal_radio_e10: precal@e10 {
++						reg = <0xe10 0x19c10>;
++					};
++				};
++			};
++
++			partition@b0000 {
++				label = "config_bak";
++				reg = <0xb0000 0x10000>;
++				read-only;
++			};
++
++			partition@c0000 {
++				compatible = "denx,fit";
++				label = "firmware";
++				reg = <0xc0000 0xf30000>;
++			};
++		};
++	};
++};
++
++&pcie {
++	status = "okay";
++};
++
++&pcie1 {
++	wifi@0,0 {
++		compatible = "mediatek,mt76";
++		reg = <0x0000 0 0 0 0>;
++		nvmem-cells = <&eeprom_radio_0>, <&precal_radio_e10>, <&macaddr_rom_file_f100 0>;
++		nvmem-cell-names = "eeprom", "precal", "mac-address";
++		/* mediatek,disable-radar-background; */
++	};
++};
++
++&gmac0 {
++	nvmem-cells = <&macaddr_rom_file_f100 0>;
++	nvmem-cell-names = "mac-address";
++};
++
++&gmac1 {
++	status = "okay";
++	label = "wan";
++    phy-mode = "rgmii";
++   	phy-handle = <&ethphy0>;
++
++	nvmem-cells = <&macaddr_rom_file_f100 1>;
++	nvmem-cell-names = "mac-address";
++};
++
++&ethphy0 {
++	/delete-property/ interrupts;
++};
++
++&switch0 {
++	ports {
++
++		port@2 {
++			status = "okay";
++			label = "lan1";
++		};
++
++		port@3 {
++			status = "okay";
++			label = "lan2";
++		};
++
++		port@4 {
++			status = "okay";
++			label = "lan3";
++		};
++	};
++};
++
++&state_default {
++	gpio {
++		groups = "i2c", "uart3", "jtag", "wdt";
++		function = "gpio";
++	};
++};
+diff --git a/target/linux/ramips/image/mt7621.mk b/target/linux/ramips/image/mt7621.mk
+index f957033db3..ebf7940951 100755
+--- a/target/linux/ramips/image/mt7621.mk
++++ b/target/linux/ramips/image/mt7621.mk
+@@ -1377,7 +1377,7 @@ define Device/gemtek_wvrtm-1xxacn
+   IMAGE_SIZE := 122368k
+   DEVICE_VENDOR := Gemtek
+   DEVICE_PACKAGES := kmod-gpio-nxp-74hc164 kmod-spi-gpio \
+-  kmod-usb3 -uboot-envtools 
++  kmod-usb3 -uboot-envtools
+ endef
+ 
+ define Device/gemtek_wvrtm-127acn
+@@ -2833,6 +2833,20 @@ define Device/tplink_ex220-v1
+ endef
+ TARGET_DEVICES += tplink_ex220-v1
+ 
++define Device/tplink_ex220-v2
++  $(Device/dsa-migration)
++  DEVICE_VENDOR := TP-Link
++  DEVICE_MODEL := EX220
++  DEVICE_VARIANT := v2
++  DEVICE_PACKAGES := kmod-mt7915-firmware -uboot-envtools
++  TPLINK_BOARD_ID := EX220-V2
++  KERNEL_LOADADDR := 0x82000000
++  KERNEL := kernel-bin | relocate-kernel $(loadaddr-y) | lzma | \
++	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
++  IMAGE_SIZE := 15744k
++endef
++TARGET_DEVICES += tplink_ex220-v2
++
+ define Device/tplink_mr600-v2-eu
+   $(Device/dsa-migration)
+   $(Device/tplink-v2)
+diff --git a/target/linux/ramips/mt7621/base-files/etc/board.d/01_leds b/target/linux/ramips/mt7621/base-files/etc/board.d/01_leds
+index 1542eed8f6..cad569f25f 100644
+--- a/target/linux/ramips/mt7621/base-files/etc/board.d/01_leds
++++ b/target/linux/ramips/mt7621/base-files/etc/board.d/01_leds
+@@ -208,6 +208,10 @@ tplink,ex220-v1)
+ 	ucidef_set_led_netdev "lan" "LAN" "green:lan" "br-lan"
+ 	ucidef_set_led_netdev "wan" "WAN" "green:wan" "wan"
+ 	;;
++tplink,ex220-v2)
++	ucidef_set_led_netdev "lan" "LAN" "rgb:blue" "br-lan"
++	ucidef_set_led_netdev "wan" "WAN" "rgb:green" "wan"
++	;;
+ tplink,deco-m4r-v4)
+ 	ucidef_set_led_netdev "lan" "LAN" "green:lan" "br-lan"
+ 	;;
+diff --git a/target/linux/ramips/mt7621/base-files/etc/board.d/02_network b/target/linux/ramips/mt7621/base-files/etc/board.d/02_network
+index 2a4d1e6ce3..a356d25d56 100644
+--- a/target/linux/ramips/mt7621/base-files/etc/board.d/02_network
++++ b/target/linux/ramips/mt7621/base-files/etc/board.d/02_network
+@@ -154,6 +154,9 @@ ramips_setup_interfaces()
+ 	tplink,eap615-wall-v1)
+ 		ucidef_set_interface_lan "lan0 lan1 lan2 lan3"
+ 		;;
++    tplink,ex220-v2)
++        ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" "wan"
++        ;;
+ 	tplink,er605-v2)
+ 		ucidef_set_interfaces_lan_wan "lan2 lan3 lan4 lan5" "wan1"
+ 		;;
+diff --git a/target/linux/ramips/mt7621/base-files/etc/hotplug.d/ieee80211/10_fix_wifi_mac b/target/linux/ramips/mt7621/base-files/etc/hotplug.d/ieee80211/10_fix_wifi_mac
+index 4f19e2a4eb..626ceded1c 100644
+--- a/target/linux/ramips/mt7621/base-files/etc/hotplug.d/ieee80211/10_fix_wifi_mac
++++ b/target/linux/ramips/mt7621/base-files/etc/hotplug.d/ieee80211/10_fix_wifi_mac
+@@ -224,6 +224,10 @@ case "$board" in
+ 		hw_mac_addr="$(mtd_get_mac_binary rom_file 0xf100)"
+ 		[ "$PHYNBR" = "1" ] &&  macaddr_add "$hw_mac_addr" 2 > "/sys${DEVPATH}/macaddress"
+ 		;;
++    tplink,ex220-v2)
++		hw_mac_addr="$(mtd_get_mac_binary rom_file 0xf100)"
++		[ "$PHYNBR" = "1" ] &&  macaddr_add "$hw_mac_addr" 2 > "/sys${DEVPATH}/macaddress"
++		;;
+ 	yuncore,ax820|\
+ 	yuncore,g720)
+ 		[ "$PHYNBR" = "1" ] && \
