@@ -271,3 +271,19 @@ Instructions from [[https://openwrt.org/docs/guide-user/virtualization/obtain.fi
    #    #+end_src
 
 4. Build the image with =make=.
+
+** Fix apk distfeed
+
+Replace contents of =/etc/apk/repositories.d/distfeeds.list=.
+
+#+begin_example
+  https://downloads.openwrt.org/snapshots/targets/ramips/mt7621/packages/packages.adb
+  https://downloads.openwrt.org/snapshots/packages/mipsel_24kc/base/packages.adb
+  https://downloads.openwrt.org/snapshots/targets/ramips/mt7621/kmods/6.6.87-1-a686872732f514412c6cabddd335e0c8/packages.adb
+  https://downloads.openwrt.org/snapshots/packages/mipsel_24kc/luci/packages.adb
+  https://downloads.openwrt.org/snapshots/packages/mipsel_24kc/packages/packages.adb
+  https://downloads.openwrt.org/snapshots/packages/mips_24kc/packages/packages.adb
+  https://downloads.openwrt.org/snapshots/packages/mipsel_24kc/routing/packages.adb
+  https://downloads.openwrt.org/snapshots/packages/mipsel_24kc/telephony/packages.adb
+  https://downloads.openwrt.org/snapshots/packages/mipsel_24kc/video/packages.adb
+#+end_example
